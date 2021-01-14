@@ -23,6 +23,7 @@ import com.simplemobiletools.commons.helpers.isOreoMr1Plus
 import com.simplemobiletools.commons.helpers.isOreoPlus
 import com.simplemobiletools.commons.helpers.isQPlus
 import com.simplemobiletools.dialer.R
+import com.simplemobiletools.dialer.databinding.ActivityCallBinding
 import com.simplemobiletools.dialer.extensions.addCharacter
 import com.simplemobiletools.dialer.extensions.audioManager
 import com.simplemobiletools.dialer.extensions.config
@@ -31,9 +32,15 @@ import com.simplemobiletools.dialer.helpers.ACCEPT_CALL
 import com.simplemobiletools.dialer.helpers.CallManager
 import com.simplemobiletools.dialer.helpers.DECLINE_CALL
 import com.simplemobiletools.dialer.models.CallContact
+import com.simplemobiletools.dialer.network.RetrofitFactory.spamUserService
+import com.simplemobiletools.dialer.network.model.SpamUser
 import com.simplemobiletools.dialer.receivers.CallActionReceiver
 import kotlinx.android.synthetic.main.activity_call.*
 import kotlinx.android.synthetic.main.dialpad.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import java.util.*
 
 class CallActivity : SimpleActivity() {
@@ -47,11 +54,15 @@ class CallActivity : SimpleActivity() {
     private var callContactAvatar: Bitmap? = null
     private var proximityWakeLock: PowerManager.WakeLock? = null
     private var callTimer = Timer()
+    private lateinit var callBinding: ActivityCallBinding
+    private lateinit var spamCallList:ArrayList<SpamUser>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         supportActionBar?.hide()
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_call)
+        callBinding = ActivityCallBinding.inflate(layoutInflater).apply {
+            setContentView(this.root)
+        }
 
         updateTextColors(call_holder)
         initButtons()
@@ -61,10 +72,13 @@ class CallActivity : SimpleActivity() {
         CallManager.getCallContact(applicationContext) { contact ->
             callContact = contact
             callContactAvatar = getCallContactAvatar()
-            runOnUiThread {
+            GlobalScope.launch(Dispatchers.Main) {
+                val response = spamUserService.getSpamUsers()
+                spamCallList = async(Dispatchers.IO) {
+                    if(response.isSuccessful) return@async response.body()!!.spamUsers else null
+                }.await() as ArrayList<SpamUser>
                 setupNotification()
                 updateOtherPersonsInfo()
-                checkCalledSIMCard()
             }
         }
 
@@ -182,20 +196,33 @@ class CallActivity : SimpleActivity() {
         }
     }
 
-    private fun updateOtherPersonsInfo() {
+    private suspend fun updateOtherPersonsInfo() {
         if (callContact == null) {
             return
         }
 
-        caller_name_label.text = if (callContact!!.name.isNotEmpty()) callContact!!.name else getString(R.string.unknown_caller)
-        if (callContact!!.number.isNotEmpty() && callContact!!.number != callContact!!.name) {
-            caller_number_label.text = callContact!!.number
-        } else {
-            caller_number_label.beGone()
-        }
+        callBinding.apply {
+            callerNameLabel.text = if (callContact!!.name.isNotEmpty()) callContact!!.name else getString(R.string.unknown_caller)
+            val iterator = spamCallList.listIterator()
+            for (item in iterator){
+                if(callContact!!.number == item.phoneNumber){
+                    spamText.beVisible()
+                    callerNameLabel.text = item.username
+                    callHolder.setBackgroundColor(Color.RED)
+                }else{
+                    spamText.beGone()
+                }
+            }
 
-        if (callContactAvatar != null) {
-            caller_avatar.setImageBitmap(callContactAvatar)
+            if (callContact!!.number.isNotEmpty() && callContact!!.number != callContact!!.name) {
+                callerNumberLabel.text = callContact!!.number
+            } else {
+                callerNumberLabel.beGone()
+            }
+
+            if (callContactAvatar != null) {
+                callerAvatar.setImageBitmap(callContactAvatar)
+            }
         }
     }
 

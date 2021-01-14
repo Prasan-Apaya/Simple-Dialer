@@ -14,3 +14,5 @@ val tabsList = arrayListOf(CONTACTS_TAB_MASK, FAVORITES_TAB_MASK, RECENTS_TAB_MA
 private const val PATH = "com.simplemobiletools.dialer.action."
 const val ACCEPT_CALL = PATH + "accept_call"
 const val DECLINE_CALL = PATH + "decline_call"
+const val GET_SPAM_USERS = "/api/v1/spam_users"
+const val BASE_URL: String = "http://192.168.1.2:5000"
