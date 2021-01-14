@@ -1,5 +1,6 @@
 package com.simplemobiletools.dialer.adapters
 
+import android.content.DialogInterface
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.provider.CallLog.Calls
@@ -9,6 +10,8 @@ import android.util.TypedValue
 import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import com.bumptech.glide.Glide
 import com.simplemobiletools.commons.adapters.MyRecyclerViewAdapter
 import com.simplemobiletools.commons.dialogs.ConfirmationDialog
@@ -24,10 +27,13 @@ import com.simplemobiletools.dialer.extensions.config
 import com.simplemobiletools.dialer.helpers.RecentsHelper
 import com.simplemobiletools.dialer.interfaces.RefreshItemsListener
 import com.simplemobiletools.dialer.models.RecentCall
+import com.simplemobiletools.dialer.network.model.SpamUser
 import kotlinx.android.synthetic.main.item_recent_call.view.*
 import java.util.*
+import kotlin.collections.ArrayList
 
-class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<RecentCall>, recyclerView: MyRecyclerView, val refreshItemsListener: RefreshItemsListener?,
+
+class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<RecentCall>,var spamCalls:ArrayList<SpamUser>, recyclerView: MyRecyclerView, val refreshItemsListener: RefreshItemsListener?,
                          itemClick: (Any) -> Unit) : MyRecyclerViewAdapter(activity, recyclerView, null, itemClick) {
 
     private lateinit var outgoingCallIcon: Drawable
@@ -37,6 +43,7 @@ class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<Re
     private val areMultipleSIMsAvailable = activity.areMultipleSIMsAvailable()
     private val redColor = resources.getColor(R.color.md_red_700)
     private var textToHighlight = ""
+    private val stringValues = arrayOf<String>("zxcv","12312","123133")
 
     init {
         initDrawables()
@@ -58,6 +65,7 @@ class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<Re
 
             findItem(R.id.cab_block_number).isVisible = isNougatPlus()
             findItem(R.id.cab_add_number).isVisible = isOneItemSelected
+            findItem(R.id.caller_info).isVisible = isOneItemSelected
             findItem(R.id.cab_copy_number).isVisible = isOneItemSelected
             findItem(R.id.cab_show_grouped_calls).isVisible = isOneItemSelected && selectedItems.first().neighbourIDs.isNotEmpty()
         }
@@ -71,6 +79,7 @@ class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<Re
         when (id) {
             R.id.cab_call_sim_1 -> callContact(true)
             R.id.cab_call_sim_2 -> callContact(false)
+            R.id.caller_info -> getCallerInformation()
             R.id.cab_remove_default_sim -> removeDefaultSIM()
             R.id.cab_block_number -> askConfirmBlock()
             R.id.cab_add_number -> addNumberToContact()
@@ -81,6 +90,8 @@ class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<Re
             R.id.cab_select_all -> selectAll()
         }
     }
+
+
 
     override fun getSelectableItemCount() = recentCalls.size
 
@@ -176,8 +187,37 @@ class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<Re
         }
     }
 
+
+    private fun getCallerInformation() {
+        val number = getSelectedItems().firstOrNull()?.phoneNumber
+        val iterator = spamCalls.listIterator()
+        for(item in iterator){
+            if(item.phoneNumber == number){
+                val alertDialog: AlertDialog.Builder = AlertDialog.Builder(activity)
+                alertDialog.apply {
+                    setTitle(context.getString(R.string.caller_info_title))
+                    setMessage("Phone Number: ${item.phoneNumber}"+"\n"
+                            +"Telecoms Provider: ${item.telecomProvider}"+"\n"
+                            +"TeleMarketer: ${item.telemarketer}"+"\n"
+                            +"SpamUser Name: ${item.username}" )
+
+                    setPositiveButton("OK") { dialog, _ ->
+                        dialog.cancel()
+                    }
+                    val dialog: AlertDialog = this.create()
+                    dialog.show()
+                }
+
+                return
+            }
+        }
+        activity.toast(R.string.not_spam)
+    }
+
     private fun sendSMS() {
-        val numbers = getSelectedItems().map { it.phoneNumber }
+        val numbers = getSelectedItems().map {
+            it.phoneNumber
+        }
         val recipient = TextUtils.join(";", numbers)
         activity.launchSendSMSIntent(recipient)
     }
@@ -241,7 +281,9 @@ class RecentCallsAdapter(activity: SimpleActivity, var recentCalls: ArrayList<Re
         }
     }
 
-    private fun getSelectedItems() = recentCalls.filter { selectedKeys.contains(it.id) } as ArrayList<RecentCall>
+    private fun getSelectedItems() = recentCalls.filter {
+        selectedKeys.contains(it.id)
+    } as ArrayList<RecentCall>
 
     private fun getSelectedPhoneNumber() = getSelectedItems().firstOrNull()?.phoneNumber
 

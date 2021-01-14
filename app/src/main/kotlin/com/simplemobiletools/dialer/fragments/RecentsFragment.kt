@@ -2,6 +2,7 @@ package com.simplemobiletools.dialer.fragments
 
 import android.content.Context
 import android.util.AttributeSet
+import android.util.Log
 import com.simplemobiletools.commons.extensions.*
 import com.simplemobiletools.commons.helpers.MyContactsContentProvider
 import com.simplemobiletools.commons.helpers.PERMISSION_READ_CALL_LOG
@@ -13,10 +14,22 @@ import com.simplemobiletools.dialer.extensions.config
 import com.simplemobiletools.dialer.helpers.RecentsHelper
 import com.simplemobiletools.dialer.interfaces.RefreshItemsListener
 import com.simplemobiletools.dialer.models.RecentCall
+import com.simplemobiletools.dialer.network.RetrofitFactory
+import com.simplemobiletools.dialer.network.model.SpamUser
 import kotlinx.android.synthetic.main.fragment_recents.view.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 
 class RecentsFragment(context: Context, attributeSet: AttributeSet) : MyViewPagerFragment(context, attributeSet), RefreshItemsListener {
     private var allRecentCalls = ArrayList<RecentCall>()
+    private lateinit var spamCallList: ArrayList<SpamUser>
+    companion object{
+        private const val TAG = "RecentsFragment"
+    }
+
+
 
     override fun setupFragment() {
         val placeholderResId = if (context.hasPermission(PERMISSION_READ_CALL_LOG)) {
@@ -70,14 +83,19 @@ class RecentsFragment(context: Context, attributeSet: AttributeSet) : MyViewPage
                 }
 
                 allRecentCalls = recents
-                activity?.runOnUiThread {
-                    gotRecents(recents)
+                GlobalScope.launch(Dispatchers.Main){
+                    val response = RetrofitFactory.spamUserService.getSpamUsers()
+                    spamCallList = async(Dispatchers.IO) {
+                        if (response.isSuccessful) return@async response.body()!!.spamUsers else null
+                    }.await() as ArrayList<SpamUser>
+                    Log.d(TAG, "setupFragment: $spamCallList")
+                    gotRecents(recents,spamCallList)
                 }
             }
         }
     }
 
-    private fun gotRecents(recents: ArrayList<RecentCall>) {
+    private fun gotRecents(recents: ArrayList<RecentCall>,spamList:ArrayList<SpamUser>) {
         if (recents.isEmpty()) {
             recents_placeholder.beVisible()
             recents_placeholder_2.beVisibleIf(!context.hasPermission(PERMISSION_READ_CALL_LOG))
@@ -89,7 +107,7 @@ class RecentsFragment(context: Context, attributeSet: AttributeSet) : MyViewPage
 
             val currAdapter = recents_list.adapter
             if (currAdapter == null) {
-                RecentCallsAdapter(activity as SimpleActivity, recents, recents_list, this) {
+                RecentCallsAdapter(activity as SimpleActivity, recents,spamList, recents_list, this) {
                     activity?.launchCallIntent((it as RecentCall).phoneNumber)
                 }.apply {
                     recents_list.adapter = this
@@ -109,7 +127,7 @@ class RecentsFragment(context: Context, attributeSet: AttributeSet) : MyViewPage
                 val groupSubsequentCalls = context?.config?.groupSubsequentCalls ?: false
                 RecentsHelper(context).getRecentCalls(groupSubsequentCalls) { recents ->
                     activity?.runOnUiThread {
-                        gotRecents(recents)
+                        gotRecents(recents,spamCallList)
                     }
                 }
             }

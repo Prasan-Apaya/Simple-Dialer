@@ -17,6 +17,11 @@
         android:title="@string/delete"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/caller_info"
+        android:icon="@drawable/ic_caller_info"
+        android:title="@string/caller_information"
+        app:showAsAction="always"/>
+    <item
         android:id="@+id/cab_add_number"
         android:icon="@drawable/ic_add_person_vector"
         android:title="@string/add_number_to_contact"

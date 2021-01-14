@@ -7,7 +7,7 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class SpamUser(
     @Json(name = "phoneNumber")
-    val phoneNumber: String,
+    var phoneNumber: String,
     @Json(name = "telecomProvider")
     val telecomProvider: String,
     @Json(name = "telemarketer")
